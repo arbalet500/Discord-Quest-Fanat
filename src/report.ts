@@ -166,7 +166,8 @@ export async function sendReport(input: ReportInput) {
 	const u = new URL(url);
 	u.searchParams.set('with_components', 'true');
 	u.searchParams.set('wait', 'true');
-	const body = { username: 'Discord Quest', ...buildReport(input) };
+	const username = (process.env.WEBHOOK_USERNAME ?? 'Quest Bot').replace(/discord/gi, '').trim() || 'Quest Bot';
+	const body = { username, ...buildReport(input) };
 	try {
 		const res = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 		if (!res.ok) console.error(`[Webhook] ${res.status}: ${(await res.text()).slice(0, 500)}`);
