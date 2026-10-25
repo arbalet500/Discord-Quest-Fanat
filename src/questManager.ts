@@ -283,6 +283,7 @@ export class QuestManager implements Iterable<Quest> {
 					`Failed to enroll in quest "${questName}".`,
 					err?.message,
 				);
+				this.client.setQuestError(quest.id, `Не удалось записаться: ${err?.message ?? 'ошибка'}`);
 				return;
 			}
 		} else {
@@ -350,6 +351,7 @@ export class QuestManager implements Iterable<Quest> {
 				break;
 			}
 			default: {
+				this.client.setQuestError(quest.id, `Неизвестный тип квеста: ${taskName}`);
 				console.log(
 					'Unknown quest type. Use the discord desktop app to complete the',
 					questName,
@@ -526,6 +528,7 @@ export class QuestManager implements Iterable<Quest> {
 			authCode = new URL(location).searchParams.get('code');
 		}
 		if (!authCode) {
+			this.client.setQuestError(quest.id, 'Не получен код авторизации приложения');
 			console.error(
 				`No auth code received for application ${applicationName}. Cannot complete the quest.`,
 			);
@@ -539,6 +542,7 @@ export class QuestManager implements Iterable<Quest> {
 			this.client,
 		);
 		if (authError || !token) {
+			this.client.setQuestError(quest.id, `Ошибка авторизации Discord Says: ${authError ?? 'нет токена'}`);
 			console.error(
 				`Failed to authorize with Discord Says for application ${applicationName}. Cannot complete the quest.`,
 				authError,
@@ -554,6 +558,7 @@ export class QuestManager implements Iterable<Quest> {
 				activityReferrer,
 			);
 		if (progressError || !success) {
+			this.client.setQuestError(quest.id, `Ошибка прогресса Discord Says: ${progressError ?? 'неизвестно'}`);
 			console.error(
 				`Failed to progress quest with Discord Says for application ${applicationName}. Cannot complete the quest.`,
 				progressError,

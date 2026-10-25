@@ -7,6 +7,7 @@ import { QuestManager } from './questManager';
 import { AllQuestsResponse } from './interface';
 import { Constants } from './constants';
 import { Utils } from './utils';
+import { sendReport } from './report';
 
 async function makeRequest(
 	url: string,
@@ -44,6 +45,8 @@ export class ClientQuest extends Client {
 	public questManager: QuestManager | null = null;
 	public websocketManager: WebSocketManager;
 	public webhook = new WebhooksAPI(new REST());
+	public readonly completedQuests = new Set<string>();
+	public readonly questErrors = new Map<string, string>();
 	#webhookId: string | null = null;
 	#webhookToken: string | null = null;
 	constructor(token: string) {
@@ -90,7 +93,7 @@ export class ClientQuest extends Client {
 			this.setupWebhook(),
 		]).then(() => this.websocketManager.connect()).catch((e) => {
 			console.error('Error during client connection:', e.message);
-			return this.sendWebhookMessage('Error during client connection: ' + e.message);
+			return sendReport({ results: [], found: 0, startedAt: Date.now(), fatal: 'Ошибка подключения: ' + e.message });
 		});
 	}
 	destroy() {
@@ -129,9 +132,11 @@ export class ClientQuest extends Client {
 				.catch(() => {});
 		}
 	}
+	setQuestError(questId: string, reason: string) {
+		this.questErrors.set(questId, reason);
+	}
 	emitQuestCompleted(questId: string) {
-		return this.sendWebhookMessage(
-			`[Quest Completed!](https://discord.com/quests/${questId})`,
-		);
+		// Webhook report is sent once at the end of the run (see src/report.ts)
+		this.completedQuests.add(questId);
 	}
 }
