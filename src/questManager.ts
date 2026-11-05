@@ -54,9 +54,7 @@ export class QuestManager implements Iterable<Quest> {
 					targeted_content: 0,
 					preview: false,
 				});
-				console.log(
-					`Added excluded quest "${quest.config.messages.quest_name}" to the quest manager.`,
-				);
+				(quest as any).isExcluded = true;
 				this.quests.set(quest.id, quest);
 			})
 			.catch((err) => {
@@ -114,15 +112,21 @@ export class QuestManager implements Iterable<Quest> {
 	}
 
 	filterQuestsValidToDo() {
+		const now = Date.now();
 		return this.list().filter((quest) => {
 			if (quest.isCompleted()) return false;
 			if (quest.isExpired()) return false;
-			if (!quest.isStarted()) {
+			
+			const startTime = quest.config.starts_at ? new Date(quest.config.starts_at).getTime() : 0;
+			if (startTime > now) {
+				const dateStr = new Date(startTime).toLocaleString();
 				console.log(
-					`Skipping quest "${quest.config.messages.quest_name}" — квест ещё не начался (старт: ${quest.config.starts_at}).`,
+					`[Skip] Quest "${quest.config.messages.quest_name}" еще не начался на серверах (старт: ${dateStr}) — пропуск.`,
 				);
 				return false;
 			}
+
+			// Пытаемся выполнить ВСЕ квесты, включая региональные и дубликаты!
 			return true;
 		});
 	}
@@ -184,8 +188,8 @@ export class QuestManager implements Iterable<Quest> {
 		let timer: any;
 		const timeoutPromise = new Promise<never>((_, reject) => {
 			timer = setTimeout(
-				() => reject(new Error('Таймаут запроса записи на квест (превышено 20 сек)')),
-				20_000,
+				() => reject(new Error('Таймаут запроса записи на квест (превышено 4 сек)')),
+				4_000,
 			);
 		});
 
