@@ -151,7 +151,7 @@ export function buildReport({ results, found, startedAt, userId, fatal }: Report
 	const components: any[] = [];
 	const ping = hasErrors && userId;
 	if (ping) components.push(text(`<@${userId}> требуется внимание`));
-	components.push({ type: C.CONTAINER, accent_color: accent, components: inner });
+	components.push({ type: C.CONTAINER, accent_color: accent, components: inner.slice(0, 38) });
 
 	return {
 		flags: IS_COMPONENTS_V2,

@@ -19,7 +19,7 @@ client.once(GatewayDispatchEvents.Ready, async ({ data }) => {
 	let found = 0;
 	let fatal: string | undefined;
 	try {
-		await client.fetchQuests(true);
+		await client.fetchQuests(false);
 		const quests = client.questManager!.filterQuestsValidToDo();
 		found = quests.length;
 		console.log(`Found ${found} valid quests to do.`);
