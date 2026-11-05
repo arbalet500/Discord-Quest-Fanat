@@ -19,29 +19,27 @@ client.once(GatewayDispatchEvents.Ready, async ({ data }) => {
 	let found = 0;
 	let fatal: string | undefined;
 	try {
-		await client.fetchQuests(false);
+		await client.fetchQuests(true);
 		const quests = client.questManager!.filterQuestsValidToDo();
 		found = quests.length;
 		console.log(`Found ${found} valid quests to do.`);
-		await Promise.all(
-			quests.map(async (quest) => {
-				const t0 = Date.now();
-				const tasks = (quest as any).config?.task_config_v2?.tasks ?? {};
-				const unsupported = Object.keys(UNSUPPORTED).find((k) => tasks[k]);
-				try {
-					await client.questManager!.doingQuest(quest);
-					const ok = client.completedQuests.has(quest.id);
-					results.push({
-						quest,
-						durationMs: Date.now() - t0,
-						status: ok ? 'completed' : unsupported ? 'skipped' : 'failed',
-						reason: ok ? undefined : unsupported ? UNSUPPORTED[unsupported] : client.questErrors.get(quest.id) ?? 'Квест не завершён — подробности в логе',
-					});
-				} catch (e: any) {
-					results.push({ quest, status: 'failed', durationMs: Date.now() - t0, reason: e?.message ?? String(e) });
-				}
-			}),
-		);
+		for (const quest of quests) {
+			const t0 = Date.now();
+			const tasks = (quest as any).config?.task_config_v2?.tasks ?? {};
+			const unsupported = Object.keys(UNSUPPORTED).find((k) => tasks[k]);
+			try {
+				await client.questManager!.doingQuest(quest);
+				const ok = client.completedQuests.has(quest.id);
+				results.push({
+					quest,
+					durationMs: Date.now() - t0,
+					status: ok ? 'completed' : unsupported ? 'skipped' : 'failed',
+					reason: ok ? undefined : unsupported ? UNSUPPORTED[unsupported] : client.questErrors.get(quest.id) ?? 'Квест не завершён — подробности в логе',
+				});
+			} catch (e: any) {
+				results.push({ quest, status: 'failed', durationMs: Date.now() - t0, reason: e?.message ?? String(e) });
+			}
+		}
 	} catch (e: any) {
 		fatal = e?.message ?? String(e);
 		console.error('Failed to process quests:', fatal);

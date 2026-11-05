@@ -154,27 +154,40 @@ export class Utils extends null {
 		for (const [key, value] of Object.entries(discordSaysHeaders)) {
 			headers.append(key, value);
 		}
-		const token = await fetch(
-			`https://${applicationId}.discordsays.com/.proxy/acf/authorize`,
-			{
-				body: JSON.stringify({ code: authCode }),
-				method: 'POST',
-				headers,
-			},
-		)
-			.then(
-				(res) =>
-					res.json() as any as {
-						token: string;
-					},
-			)
-			.then((data) => data.token)
-			.catch((e) => {
-				console.error('Error authorizing with Discord Says:', e);
-				error = e instanceof Error ? e.message : String(e);
-				return '';
-			});
-		return { token, error, activityReferrer };
+		headers.set('X-Discord-Activity-Id', applicationId);
+		headers.set('X-Discord-Hostname', `${applicationId}.discordsays.com`);
+		try {
+			const res = await fetch(
+				`https://${applicationId}.discordsays.com/.proxy/acf/authorize`,
+				{
+					body: JSON.stringify({ code: authCode, activityId: applicationId }),
+					method: 'POST',
+					headers,
+				},
+			);
+			if (!res.ok) {
+				const body = await res.text().catch(() => '');
+				return {
+					token: false,
+					error: `HTTP ${res.status}: ${body || 'Empty response'}`,
+					activityReferrer,
+				};
+			}
+			const data = (await res.json().catch(() => ({}))) as any;
+			const token = data.token || data.access_token || false;
+			return {
+				token,
+				error: token ? null : 'No token received from ACF authorize',
+				activityReferrer,
+			};
+		} catch (e: any) {
+			console.error('Error authorizing with Discord Says:', e);
+			return {
+				token: false,
+				error: e instanceof Error ? e.message : String(e),
+				activityReferrer,
+			};
+		}
 	}
 	public static async progressDiscordSays(
 		applicationId: string,
@@ -183,7 +196,6 @@ export class Utils extends null {
 		questTarget: number,
 		activityReferrer: string,
 	): Promise<{ success: boolean; error: any }> {
-		let error = null;
 		const headers = Utils.makeDesktopHeaders(false, false);
 		const discordSaysHeaders = Utils.getActivityHeaders(
 			questId,
@@ -193,20 +205,34 @@ export class Utils extends null {
 		for (const [key, value] of Object.entries(discordSaysHeaders)) {
 			headers.append(key, value);
 		}
-		const success = await fetch(
-			`https://${applicationId}.discordsays.com/.proxy/acf/quest/progress`,
-			{
-				headers,
-				body: JSON.stringify({ progress: questTarget }),
-				method: 'POST',
-			},
-		)
-			.then((res) => res.ok)
-			.catch((e) => {
-				error = e instanceof Error ? e.message : String(e);
-				return false;
-			});
-		return { success, error };
+		headers.set('X-Discord-Activity-Id', applicationId);
+		headers.set('X-Discord-Hostname', `${applicationId}.discordsays.com`);
+		try {
+			const res = await fetch(
+				`https://${applicationId}.discordsays.com/.proxy/acf/quest/progress`,
+				{
+					headers,
+					body: JSON.stringify({
+						progress: questTarget,
+						quest_id: questId,
+					}),
+					method: 'POST',
+				},
+			);
+			if (!res.ok) {
+				const body = await res.text().catch(() => '');
+				return {
+					success: false,
+					error: `HTTP ${res.status} (${res.statusText || 'Error'}): ${body || 'Empty response'}`,
+				};
+			}
+			return { success: true, error: null };
+		} catch (e: any) {
+			return {
+				success: false,
+				error: e instanceof Error ? e.message : String(e),
+			};
+		}
 	}
 	public static async askQuestion(promptText: string): Promise<string> {
 		const rl = readline.createInterface({ input, output });
