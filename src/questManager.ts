@@ -54,6 +54,9 @@ export class QuestManager implements Iterable<Quest> {
 					targeted_content: 0,
 					preview: false,
 				});
+				console.log(
+					`Added excluded quest "${quest.config.messages.quest_name}" to the quest manager.`,
+				);
 				(quest as any).isExcluded = true;
 				this.quests.set(quest.id, quest);
 			})
@@ -165,7 +168,7 @@ export class QuestManager implements Iterable<Quest> {
 	 * @warning This API is heavily rate-limited (45 minutes). Use with caution.
 	 */
 	acceptQuest(quest: Quest, isAndroid = false): Promise<Quest | undefined> {
-		const enrollPromise = this.client.rest
+		return this.client.rest
 			.post(`/quests/${quest.id}/enroll`, {
 				body: {
 					location: isAndroid ? 12 : 11, // QUEST_HOME_MOBILE : QUEST_HOME_DESKTOP | https://docs.discord.food/resources/quests#quest-content-type
@@ -184,18 +187,6 @@ export class QuestManager implements Iterable<Quest> {
 				q?.updateUserStatus(r as any);
 				return q;
 			});
-
-		let timer: any;
-		const timeoutPromise = new Promise<never>((_, reject) => {
-			timer = setTimeout(
-				() => reject(new Error('Таймаут запроса записи на квест (превышено 4 сек)')),
-				4_000,
-			);
-		});
-
-		return Promise.race([enrollPromise, timeoutPromise]).finally(() => {
-			if (timer) clearTimeout(timer);
-		});
 	}
 
 	private async timeout(ms: number) {
