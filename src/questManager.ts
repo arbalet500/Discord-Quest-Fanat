@@ -293,7 +293,11 @@ export class QuestManager implements Iterable<Quest> {
 			try {
 				await this.acceptQuest(quest, isAndroid);
 			} catch (err: any) {
-				const reason = err?.rawError?.message || err?.message || String(err);
+				const isRateLimit = err?.name === 'RateLimitError' || err?.message?.includes('rate limit');
+				const retrySec = err?.retryAfter ? Math.ceil(err.retryAfter / 1000) : null;
+				const reason = isRateLimit
+					? `Лимит запросов Discord на запись (Rate limit cooldown ${retrySec ? retrySec + 's' : ''})`
+					: (err?.rawError?.message || err?.message || String(err));
 				console.warn(
 					`[Skip] Failed to enroll in quest "${questName}" — skipping: ${reason}`,
 				);

@@ -57,9 +57,10 @@ export class ClientQuest extends Client {
 			version: '10',
 			makeRequest,
 			rejectOnRateLimit: (info: any) => {
-				const waitMs = info.timeToReset ?? info.retryAfter ?? 0;
-				// If rate limit wait is longer than 15s (e.g. 45m enroll bucket), reject immediately so bot skips and doesn't freeze
-				return waitMs > 15_000;
+				// If route is /enroll, never sleep on rate limit — reject immediately so bot skips
+				if (info?.route?.includes('enroll')) return true;
+				const waitMs = Math.max(info?.retryAfter ?? 0, info?.timeToReset ?? 0);
+				return waitMs > 5_000;
 			},
 		}).setToken(token);
 		rest.on('rateLimited', (info: any) => {
