@@ -114,9 +114,17 @@ export class QuestManager implements Iterable<Quest> {
 	}
 
 	filterQuestsValidToDo() {
-		return this.list().filter(
-			(quest) => !quest.isCompleted() && !quest.isExpired(),
-		);
+		return this.list().filter((quest) => {
+			if (quest.isCompleted()) return false;
+			if (quest.isExpired()) return false;
+			if (!quest.isStarted()) {
+				console.log(
+					`Skipping quest "${quest.config.messages.quest_name}" — квест ещё не начался (старт: ${quest.config.starts_at}).`,
+				);
+				return false;
+			}
+			return true;
+		});
 	}
 
 	filterQuestsValidToRedeem() {
@@ -153,8 +161,7 @@ export class QuestManager implements Iterable<Quest> {
 	 * @warning This API is heavily rate-limited (45 minutes). Use with caution.
 	 */
 	acceptQuest(quest: Quest, isAndroid = false): Promise<Quest | undefined> {
-		// console.log(`Accepting quest "${questId}"...`);
-		return this.client.rest
+		const enrollPromise = this.client.rest
 			.post(`/quests/${quest.id}/enroll`, {
 				body: {
 					location: isAndroid ? 12 : 11, // QUEST_HOME_MOBILE : QUEST_HOME_DESKTOP | https://docs.discord.food/resources/quests#quest-content-type
@@ -173,6 +180,18 @@ export class QuestManager implements Iterable<Quest> {
 				q?.updateUserStatus(r as any);
 				return q;
 			});
+
+		let timer: any;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timer = setTimeout(
+				() => reject(new Error('Таймаут запроса записи на квест (превышено 20 сек)')),
+				20_000,
+			);
+		});
+
+		return Promise.race([enrollPromise, timeoutPromise]).finally(() => {
+			if (timer) clearTimeout(timer);
+		});
 	}
 
 	private async timeout(ms: number) {
@@ -279,11 +298,11 @@ export class QuestManager implements Iterable<Quest> {
 			try {
 				await this.acceptQuest(quest, isAndroid);
 			} catch (err: any) {
-				console.error(
-					`Failed to enroll in quest "${questName}".`,
-					err?.message,
+				const reason = err?.rawError?.message || err?.message || String(err);
+				console.warn(
+					`[Skip] Failed to enroll in quest "${questName}" — skipping: ${reason}`,
 				);
-				this.client.setQuestError(quest.id, `Не удалось записаться: ${err?.message ?? 'ошибка'}`);
+				this.client.setQuestError(quest.id, `Не удалось записаться (${reason})`);
 				return;
 			}
 		} else {

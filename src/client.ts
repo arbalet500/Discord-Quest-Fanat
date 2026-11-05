@@ -53,7 +53,15 @@ export class ClientQuest extends Client {
 		if (!token) {
 			throw new Error('Token is required to initialize the client.');
 		}
-		const rest = new REST({ version: '10', makeRequest }).setToken(token);
+		const rest = new REST({
+			version: '10',
+			makeRequest,
+			rejectOnRateLimit: (info: any) => {
+				const waitMs = info.timeToReset ?? info.retryAfter ?? 0;
+				// If rate limit wait is longer than 15s (e.g. 45m enroll bucket), reject immediately so bot skips and doesn't freeze
+				return waitMs > 15_000;
+			},
+		}).setToken(token);
 		rest.on('rateLimited', (info: any) => {
 			console.warn(
 				`\n[RateLimit]\n` +

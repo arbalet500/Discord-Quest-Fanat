@@ -41,6 +41,11 @@ export class Quest {
 		return reference.getTime() > new Date(this.data.config.expires_at).getTime();
 	}
 
+	isStarted(reference: Date = new Date()): boolean {
+		if (!this.data.config.starts_at) return true;
+		return reference.getTime() >= new Date(this.data.config.starts_at).getTime();
+	}
+
 	isCompleted(): boolean {
 		return Boolean(this.userStatus?.completed_at);
 	}
