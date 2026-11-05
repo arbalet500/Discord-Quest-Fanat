@@ -513,96 +513,112 @@ export class QuestManager implements Iterable<Quest> {
 		console.log(`Quest "${questName}" completed!`);
 		this.client.emitQuestCompleted(quest.id);
 	}
+	private static readonly appLocks = new Map<string, Promise<void>>();
+
 	async doingAchievementInActivityQuest(quest: Quest, questName: string) {
-		// 1. Get application ID
 		const applicationId = quest.config.application.id;
-		const applicationName = quest.config.application.name;
-		const questTarget =
-			quest.config.task_config_v2.tasks.ACHIEVEMENT_IN_ACTIVITY.target;
-		// 2. Authorize
-		const query = new URLSearchParams({
-			response_type: 'code',
-			client_id: applicationId,
-			scope: 'identify applications.commands applications.entitlements',
-			state: '',
+		while (QuestManager.appLocks.has(applicationId)) {
+			await QuestManager.appLocks.get(applicationId);
+		}
+		let unlock: () => void = () => {};
+		const lockPromise = new Promise<void>((resolve) => {
+			unlock = resolve;
 		});
-		const res2 = (await this.client.rest.post(`/oauth2/authorize`, {
-			query,
-			body: {
-				permissions: '0',
-				authorize: true,
-				integration_type: 1,
-				location_context: {
-					guild_id: '10000',
-					channel_id: '10000',
-					channel_type: 10000,
+		QuestManager.appLocks.set(applicationId, lockPromise);
+
+		try {
+			// 1. Get application ID
+			const applicationName = quest.config.application.name;
+			const questTarget =
+				quest.config.task_config_v2.tasks.ACHIEVEMENT_IN_ACTIVITY.target;
+			// 2. Authorize
+			const query = new URLSearchParams({
+				response_type: 'code',
+				client_id: applicationId,
+				scope: 'identify applications.commands applications.entitlements',
+				state: '',
+			});
+			const res2 = (await this.client.rest.post(`/oauth2/authorize`, {
+				query,
+				body: {
+					permissions: '0',
+					authorize: true,
+					integration_type: 1,
+					location_context: {
+						guild_id: '10000',
+						channel_id: '10000',
+						channel_type: 10000,
+					},
 				},
-			},
-		})) as Record<string, any>;
-		console.log(`Authorized application ${applicationName}`);
-		const location = res2?.location;
-		let authCode: string | null = null;
-		if (location) {
-			authCode = new URL(location).searchParams.get('code');
-		}
-		if (!authCode) {
-			this.client.setQuestError(quest.id, 'Не получен код авторизации приложения');
-			console.error(
-				`No auth code received for application ${applicationName}. Cannot complete the quest.`,
-			);
-			return;
-		}
-		// 3. Complete achievement in activity
-		const { token, error: authError, activityReferrer } = await Utils.authorizeDiscordSays(
-			applicationId,
-			quest.id,
-			authCode,
-			this.client,
-		);
-		if (authError || !token) {
-			this.client.setQuestError(quest.id, `Ошибка авторизации Discord Says: ${authError ?? 'нет токена'}`);
-			console.error(
-				`Failed to authorize with Discord Says for application ${applicationName}. Cannot complete the quest.`,
-				authError,
-			);
-			return;
-		}
-		const { success, error: progressError } =
-			await Utils.progressDiscordSays(
+			})) as Record<string, any>;
+			console.log(`Authorized application ${applicationName}`);
+			const location = res2?.location;
+			let authCode: string | null = null;
+			if (location) {
+				authCode = new URL(location).searchParams.get('code');
+			}
+			if (!authCode) {
+				this.client.setQuestError(quest.id, 'Не получен код авторизации приложения');
+				console.error(
+					`No auth code received for application ${applicationName}. Cannot complete the quest.`,
+				);
+				return;
+			}
+			// 3. Complete achievement in activity
+			const { token, error: authError, activityReferrer } = await Utils.authorizeDiscordSays(
 				applicationId,
 				quest.id,
-				token,
-				questTarget,
-				activityReferrer,
+				authCode,
+				this.client,
 			);
-		if (progressError || !success) {
-			this.client.setQuestError(quest.id, `Ошибка прогресса Discord Says: ${progressError ?? 'неизвестно'}`);
-			console.error(
-				`Failed to progress quest with Discord Says for application ${applicationName}. Cannot complete the quest.`,
-				progressError,
-			);
-			return;
-		}
-		// 4. Deauthorize
-		const res3 = (await this.client.rest.get(`/oauth2/tokens`)) as {
-			id: string;
-			scopes: string[];
-			application: APIApplication;
-			disclosures: number[];
-		}[];
-		const tokenInfo = res3.find((t) => t.application.id === applicationId);
-		if (tokenInfo) {
-			try {
-				await this.client.rest.delete(`/oauth2/tokens/${tokenInfo.id}`);
-				console.log(`Deauthorized application ${applicationName}`);
-			} catch (err) {
+			if (authError || !token) {
+				this.client.setQuestError(quest.id, `Ошибка авторизации Discord Says: ${authError ?? 'нет токена'}`);
 				console.error(
-					`Failed to deauthorize token for application ${applicationName}.`,
-					(err as Error).message,
+					`Failed to authorize with Discord Says for application ${applicationName}. Cannot complete the quest.`,
+					authError,
 				);
+				return;
 			}
+			const { success, error: progressError } =
+				await Utils.progressDiscordSays(
+					applicationId,
+					quest.id,
+					token,
+					questTarget,
+					activityReferrer,
+				);
+			if (progressError || !success) {
+				this.client.setQuestError(quest.id, `Ошибка прогресса Discord Says: ${progressError ?? 'неизвестно'}`);
+				console.error(
+					`Failed to progress quest with Discord Says for application ${applicationName}. Cannot complete the quest.`,
+					progressError,
+				);
+				return;
+			}
+			// 4. Deauthorize
+			const res3 = (await this.client.rest.get(`/oauth2/tokens`)) as {
+				id: string;
+				scopes: string[];
+				application: APIApplication;
+				disclosures: number[];
+			}[];
+			const tokenInfo = res3.find((t) => t.application.id === applicationId);
+			if (tokenInfo) {
+				try {
+					await this.client.rest.delete(`/oauth2/tokens/${tokenInfo.id}`);
+					console.log(`Deauthorized application ${applicationName}`);
+				} catch (err) {
+					console.error(
+						`Failed to deauthorize token for application ${applicationName}.`,
+						(err as Error).message,
+					);
+				}
+			}
+			console.log(`Quest "${questName}" completed!`);
+			this.client.emitQuestCompleted(quest.id);
+		} finally {
+			QuestManager.appLocks.delete(applicationId);
+			unlock();
 		}
-		console.log(`Quest "${questName}" completed!`);
-		this.client.emitQuestCompleted(quest.id);
 	}
 }
